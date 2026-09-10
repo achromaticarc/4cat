@@ -207,9 +207,13 @@ class TikTokVideoMetadata(BasicProcessor):
             tiktok_url_column = "tiktok_url"
 
         metadata_urls = {}
+        image_posts = 0
         for mapped_item in self.source_dataset.iterate_items(self):
             post_id = mapped_item.get(column)
             if not post_id:
+                continue
+            if mapped_item.get("is_image_post") == "yes":
+                image_posts += 1
                 continue
             try:
                 # Test post ID is an integer (as TikTok post IDs ought to be)
@@ -220,11 +224,22 @@ class TikTokVideoMetadata(BasicProcessor):
             
             # Get TikTok post URL for YT-DLP
             tiktok_url = mapped_item.get(tiktok_url_column, "")
+
+            # Double-check: don't get photo posts (should already be skipped)
+            if "/photo/" in tiktok_url:
+                continue
             
             metadata_urls[f"https://www.tiktok.com/embed/v2/{post_id}"] = {
                 "id": post_id,
                 "tiktok_url": tiktok_url
-            } 
+            }
+
+        if not metadata_urls:
+            self.dataset.finish_as_empty("No video URLs found for this dataset; all posts are likely images.")
+            self.job.finish()
+            return
+        if image_posts:
+            self.dataset.update_status(f"Skipping {image_posts} image posts.")
 
         with self.dataset.get_results_path().open("w", newline="") as outfile:
             writer = csv.DictWriter(outfile, fieldnames=["id", "tiktok_url", "video_url", "errors", "fallback_only"])
@@ -254,11 +269,10 @@ class TikTokVideoMetadata(BasicProcessor):
                     "errors": [],
                     "fallback_only": False
                 }
-
                 if isinstance(response, FailedProxiedRequest):
                     forced_stop = self._track_failures(f"Failed to retrieve URL {url} ({response.context})", item_result)
                 else:
-                    # Collect Video Download URL
+                    # Collect video download URL
                     soup = BeautifulSoup(response.text, "html.parser")
                     json_source = soup.select_one("script#__FRONTITY_CONNECT_STATE__")
                     video_metadata = None
@@ -298,9 +312,9 @@ class TikTokVideoMetadata(BasicProcessor):
         if forced_stop:
             self.dataset.finish_with_warning(total_processed, f"Unable to continue after {urls_success} urls; see logs for details")
         elif self.interrupted:
-            self.dataset.finish_with_warning(total_processed, f"Interrupted after collecting Video URLs for {urls_success} posts.")
+            self.dataset.finish_with_warning(total_processed, f"Interrupted after collecting video URLs for {urls_success} posts.")
         elif self.urls_failed > 0:
-            self.dataset.finish_with_warning(total_processed, f"Collected Video URLs for {urls_success} posts. {self.urls_failed} did not have valid video URLs; see logs for details")
+            self.dataset.finish_with_warning(total_processed, f"Collected video URLs for {urls_success} posts. {self.urls_failed} did not have valid video URLs; see logs for details")
         else:
             self.dataset.finish(total_processed)
             self.job.finish()
@@ -318,6 +332,6 @@ class TikTokVideoMetadata(BasicProcessor):
         self.urls_failed += 1
         self.consecutive_failures += 1
         if self.consecutive_failures >= 10:
-            self.dataset.update_status("Too many consecutive failtures, stopping")
+            self.dataset.update_status("Too many consecutive failures, stopping")
             return True
         return False
