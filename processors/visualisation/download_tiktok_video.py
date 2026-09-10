@@ -75,7 +75,8 @@ class TikTokVideoDownloader(ProcessorPreset):
         :param module: Dataset or processor to determine compatibility with
         :param ConfigManager|None config:  Configuration reader (context-aware)
         """
-        return module.type in ["tiktok-search", "tiktok-urls-search"] or (module.type == "upload-search" and "tiktok" in module.get_label().lower())
+        return ((module.type.startswith("tiktok") and module.type.endswith("search"))
+                or (module.type == "upload-search" and "tiktok" in module.get_label().lower()))
 
     def get_processor_pipeline(self):
         """
