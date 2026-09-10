@@ -29,7 +29,7 @@ class TikTokVideoDownloader(ProcessorPreset):
 
     # coarse map spec; is_compatible_with (below) is the runtime truth -- it also accepts
     # tiktok uploads, which depends on the dataset label and can't be declared statically
-    compatibility = Compatibility(types={"tiktok-search", "tiktok-urls-search"}, preferred_followups=VideoDownloaderPlus.followups)
+    compatibility = Compatibility(type_prefixes={"tiktok-"}, top_dataset_only=True, preferred_followups=VideoDownloaderPlus.followups)
 
     @classmethod
     def get_options(cls, parent_dataset=None, config=None):
